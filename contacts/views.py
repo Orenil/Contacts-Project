@@ -272,51 +272,43 @@ def upload_to_campaign(api_key, campaign_id, selected_leads):
 
     return response.status_code if 'response' in locals() else None  # Return status code or None if no response
 
-class UploadCampaignEmailsAPIView(APIView):
-    def post(self, request):
-        selected_leads = request.data.get('selected_leads', [])
-        user_id = request.data.get('user_id')
-        campaign_name = request.data.get('campaign_name')
+def upload_to_campaign_emails(selected_leads, user_id, campaign_name):
+    user = User.objects.get(id=user_id)  # Retrieve the user based on the provided ID
 
+    leads_to_upload = []
+
+    for lead in selected_leads:
+        email = lead.get('email', '')
+        if not Campaign_Emails.objects.filter(email=email, user=user).exists():
+            leads_to_upload.append(Campaign_Emails(
+                user=user,  # Associate the contact with the logged-in user
+                email=email,
+                first_name=lead.get('first_name', ''),
+                last_name=lead.get('last_name', ''),
+                company=lead.get('company', ''),
+                type=lead.get('type', ''),
+                location=lead.get('location', 'None'),
+                title=lead.get('title', ''),
+                university=lead.get('university', ''),
+                campaign_name=campaign_name
+            ))
+
+    try:
+        Campaign_Emails.objects.bulk_create(leads_to_upload)
+        logging.info("Leads uploaded successfully to campaign_emails model.")
+        return True
+    except Exception as e:
+        logging.error("Failed to upload leads to campaign_emails model.")
+        logging.error("Error: %s", str(e))
+        return False
+
+@csrf_exempt
+def upload_to_campaign_view(request):
+    if request.method == 'POST':
         try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        leads_to_upload = []
-
-        for lead in selected_leads:
-            email = lead.get('email', '')
-            if not Campaign_Emails.objects.filter(email=email, user=user).exists():
-                leads_to_upload.append(Campaign_Emails(
-                    user=user,  # Associate the contact with the logged-in user
-                    email=email,
-                    first_name=lead.get('first_name', ''),
-                    last_name=lead.get('last_name', ''),
-                    company=lead.get('company', ''),
-                    type=lead.get('type', ''),
-                    location=lead.get('location', 'None'),
-                    title=lead.get('title', ''),
-                    university=lead.get('university', ''),
-                    campaign_name=campaign_name
-                ))
-
-        try:
-            Campaign_Emails.objects.bulk_create(leads_to_upload)
-            logging.info("Leads uploaded successfully to campaign_emails model.")
-            return Response({'detail': 'Leads uploaded successfully'}, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            logging.error("Failed to upload leads to campaign_emails model.")
-            logging.error("Error: %s", str(e))
-            return Response({'detail': 'Failed to upload leads'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-# @csrf_exempt
-#def upload_to_campaign_view(request):
-#    if request.method == 'POST':
-#       try:
-#           data = json.loads(request.body)
-#            selected_leads = data.get('selected_leads')
-#            campaign_name = data.get('campaign_name')
+            data = json.loads(request.body)
+            selected_leads = data.get('selected_leads')
+            campaign_name = data.get('campaign_name')
             user_id = request.user.id 
 
             if not selected_leads or not campaign_name:
